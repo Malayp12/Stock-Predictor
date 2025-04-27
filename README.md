@@ -51,7 +51,7 @@ This project uses **Linear Regression** combined with **multi-source market sent
 
 ---
 
-## 👑 About the Developer
+## 🧑‍💻 About the Developer
 
 Built by **Malay Patel**  
 - 2nd Year Computer Science Student @ Wilfrid Laurier University
