@@ -51,6 +51,15 @@ This project uses **Linear Regression** combined with **multi-source market sent
 
 ---
 
+## 📚 Development Process
+
+This project was developed following a two-stage professional workflow:
+
+- [Prototype Development Notebook](./prototype/prototype.ipynb):  
+  Early experimentation with stock price prediction using Linear Regression on Tesla data (TSLA).
+- Final Deployment:  
+  The Streamlit app (`app.py`) connects live stock prices with multi-source sentiment analysis to predict future closing prices.
+
 ## 🧑‍💻 About the Developer
 
 Built by **Malay Patel**  
