@@ -57,7 +57,7 @@ Built by **Malay Patel**
 - 2nd Year Computer Science Student @ Wilfrid Laurier University
 - Passionate about Machine Learning, Finance, and AI-driven solutions!
 
-🔗 [Connect with me on LinkedIn](www.linkedin.com/in/malaypatel12)
+🔗 [Connect with me on LinkedIn](https://www.linkedin.com/in/malaypatel12)
 
 ---
 
