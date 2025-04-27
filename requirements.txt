@@ -1,0 +1,11 @@
+streamlit
+yfinance
+scikit-learn
+pandas
+numpy
+matplotlib
+vaderSentiment
+yahoo_fin
+beautifulsoup4
+requests
+praw
