@@ -21,6 +21,8 @@ st.write("Enter a stock ticker symbol to view historical stock prices and predic
 # User input
 st.sidebar.header("Settings")
 ticker = st.sidebar.text_input("Enter Stock Symbol:", value="TSLA")
+if not ticker:
+    ticker = "TSLA"
 predict_button = st.sidebar.button("Predict")
 
 # Button
@@ -28,6 +30,7 @@ if predict_button:
     today = datetime.date.today()
 
     try:
+        st.write(f"DEBUG - Ticker entered: {ticker}")
         df = yf.download(ticker, start='2018-01-01', end=today, progress=False)
 
         if df.empty:
@@ -161,3 +164,4 @@ if predict_button:
 
     except Exception as e:
         st.error(f"⚠️ Failed to fetch data for {ticker}: {e}")
+
