@@ -1,6 +1,5 @@
 import datetime
 import streamlit as st
-import yfinance as yf
 import praw
 import pandas as pd
 import numpy as np
@@ -12,16 +11,36 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from yahoo_fin import news
 from bs4 import BeautifulSoup
 
-# Helper to safely download stock data
-def safe_download(ticker, start, end):
-    try:
-        df = yf.download(ticker, start=start, end=end, progress=False)
-        if df.empty:
-            return None
-        return df
-    except Exception as e:
-        print(f"Download failed: {e}")
+# Alpha Vantage API Setup
+API_KEY = "NTIUPIA31V3JCJOG"
+
+def get_alpha_vantage_data(symbol, api_key):
+    url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "TIME_SERIES_DAILY_ADJUSTED",
+        "symbol": symbol,
+        "outputsize": "full",
+        "apikey": api_key
+    }
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if "Time Series (Daily)" not in data:
         return None
+
+    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
+    df = df.rename(columns={
+        "1. open": "Open",
+        "2. high": "High",
+        "3. low": "Low",
+        "4. close": "Close",
+        "5. adjusted close": "Adj Close",
+        "6. volume": "Volume"
+    })
+    df = df.sort_index()
+    df.index = pd.to_datetime(df.index)
+    df = df.astype(float)
+    return df
 
 # Page setup
 st.set_page_config(page_title="Stock Price Predictor", layout="wide")
@@ -35,17 +54,16 @@ predict_button = st.sidebar.button("Predict")
 
 if predict_button:
     today = datetime.date.today()
-    df = safe_download(ticker, start='2018-01-01', end=today)
+    df = get_alpha_vantage_data(ticker, API_KEY)
 
     if df is None:
-        st.error("❌ No data found. Please check the stock symbol or try again later.")
+        st.error("❌ Failed to load stock data from Alpha Vantage.")
     else:
-        # Show historical chart
+        df = df[df.index <= pd.to_datetime(today)]
         st.markdown("---")
         st.subheader(f"{ticker} Historical Closing Price Chart")
         st.line_chart(df['Close'])
 
-        # News sentiment
         analyzer = SentimentIntensityAnalyzer()
         news_headlines = news.get_yf_rss(ticker)
         avg_news_sentiment = 0.0
@@ -56,7 +74,6 @@ if predict_button:
 
         st.sidebar.write(f"📰 Average News Sentiment Score: {avg_news_sentiment:.2f}")
 
-        # Reddit sentiment
         reddit = praw.Reddit(
             client_id='FJutQldL2-xROrFQuskFbg',
             client_secret='yU07iUbu2sqAmJqtymhgtnv9jdv3ew',
@@ -67,7 +84,6 @@ if predict_button:
         avg_reddit_sentiment = sum(reddit_sentiments) / len(reddit_sentiments) if reddit_sentiments else 0.0
         st.sidebar.write(f"👾 Average Reddit Sentiment Score: {avg_reddit_sentiment:.2f}")
 
-        # Twitter sentiment
         tweets = []
         try:
             response = requests.get(f"https://nitter.net/search?f=tweets&q=${ticker}&since=2024-01-01")
@@ -81,11 +97,9 @@ if predict_button:
         avg_twitter_sentiment = sum(twitter_sentiments) / len(twitter_sentiments) if twitter_sentiments else 0.0
         st.sidebar.write(f"🐦 Average Twitter Sentiment Score: {avg_twitter_sentiment:.2f}")
 
-        # Combined sentiment
         avg_combined_sentiment = (avg_news_sentiment + avg_reddit_sentiment + avg_twitter_sentiment) / 3
         st.sidebar.write(f"🧠 Combined Sentiment Score: {avg_combined_sentiment:.2f}")
 
-        # Prepare training data
         data = df[['Close']].values
         scaler = MinMaxScaler()
         scaled_data = scaler.fit_transform(data)
@@ -124,7 +138,6 @@ if predict_button:
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-        # Tomorrow prediction
         st.markdown("---")
         st.subheader(f"📅 Predicted Closing Price for Tomorrow ({ticker}):")
         last_60_days = scaled_data[-window_size:]
@@ -134,4 +147,4 @@ if predict_button:
         st.success(f"${tomorrow_pred_price[0][0]:.2f}")
 
         st.markdown("---")
-        st.caption("Built by Malay Patel. Powered by Streamlit, Yahoo Finance, Reddit API.")
+        st.caption("Built by Malay Patel. Powered by Streamlit, Alpha Vantage, Reddit API.")
