@@ -9,3 +9,4 @@ yahoo_fin
 beautifulsoup4
 requests
 praw
+pandas_datareader
