@@ -1,5 +1,4 @@
 streamlit
-yfinance
 scikit-learn
 pandas
 numpy
@@ -9,3 +8,4 @@ yahoo_fin
 beautifulsoup4
 requests
 praw
+yfinance>=0.2.57
