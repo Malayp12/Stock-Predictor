@@ -13,88 +13,47 @@ from sklearn.preprocessing import MinMaxScaler
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from yahoo_fin import news
 from bs4 import BeautifulSoup
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # =====================================================================
-# CREATE PERSISTENT SESSION TO REDUCE RATE LIMITING
-# =====================================================================
-# Create a persistent session for yfinance to reduce rate limiting impact
-@st.cache_resource
-def get_yf_session():
-    session = requests.Session()
-    return session
-
-# Initialize persistent session
-yf_session = get_yf_session()
-yf.set_tz_session_api(session=yf_session)
-
-# =====================================================================
-# ENHANCED DATA FETCHING WITH FALLBACK MECHANISMS
+# CACHE STOCK DATA FUNCTION WITH FALLBACK MECHANISMS
 # =====================================================================
 # Cache the stock data with multiple fallback mechanisms
 @st.cache_data(ttl=3600)  # Cache for 1 hour
-def get_stock_data(ticker, start, end):
-    # Multiple attempts with different methods
-    methods = [
-        {"method": "yfinance_direct", "retry_count": 3, "initial_delay": 2},
-        {"method": "yahoo_fin_fallback", "retry_count": 2, "initial_delay": 3}
-    ]
+def get_stock_data(ticker, period="6mo"):
+    """Get stock data with multiple fallback mechanisms to handle rate limiting"""
     
-    last_error = None
+    max_retries = 3
+    retry_delay = 2  # seconds
     
-    # Try each method until one succeeds
-    for method_info in methods:
-        method = method_info["method"]
-        retry_count = method_info["retry_count"]
-        delay = method_info["initial_delay"]
-        
-        # Multiple retries for each method
-        for attempt in range(retry_count):
-            try:
-                if method == "yfinance_direct":
-                    # First approach: direct yfinance download
-                    df = yf.download(
-                        ticker, 
-                        start=start, 
-                        end=end, 
-                        progress=False,
-                        session=yf_session
-                    )
-                    
-                    if not df.empty:
-                        return df
-                    
-                elif method == "yahoo_fin_fallback":
-                    # Second approach: use period instead of start/end dates
-                    df = yf.download(
-                        ticker, 
-                        period="5y",  # Use period instead of explicit dates
-                        progress=False,
-                        session=yf_session
-                    )
-                    
-                    if not df.empty:
-                        # Filter to desired date range after download
-                        df = df[start:end]
-                        if not df.empty:
-                            return df
-                
-                # If we get here, the current attempt failed
-                print(f"{method} attempt {attempt+1} failed. Retrying in {delay} seconds...")
-                time.sleep(delay)
-                delay *= 2  # Exponential backoff
-                
-            except Exception as e:
-                last_error = e
-                print(f"{method} attempt {attempt+1} error: {e}. Retrying in {delay} seconds...")
-                time.sleep(delay)
-                delay *= 2  # Exponential backoff
+    for attempt in range(max_retries):
+        try:
+            # First try: Get data using period parameter
+            df = yf.download(
+                ticker, 
+                period=period,
+                progress=False
+            )
+            
+            if not df.empty:
+                return df
+            
+            # If we get here, the current attempt failed
+            print(f"Download attempt {attempt+1} failed. Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff
+            
+        except Exception as e:
+            print(f"Download attempt {attempt+1} error: {e}. Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff
     
     # If we get here, all methods failed
-    print(f"All download attempts failed. Last error: {last_error}")
+    print(f"All download attempts failed.")
     
     # Final fallback: try to get just recent data (past week)
     try:
-        df = yf.download(ticker, period="1wk", progress=False, session=yf_session)
+        df = yf.download(ticker, period="1wk", progress=False)
         if not df.empty:
             st.warning("⚠️ Limited to recent data only due to API limitations.")
             return df
@@ -150,7 +109,6 @@ def get_twitter_sentiment(ticker):
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Connection': 'keep-alive',
-            'DNT': '1',  # Do Not Track
         }
         
         # Add randomized sleep to avoid rate limiting
@@ -230,6 +188,8 @@ st.write("Enter a stock ticker symbol to view historical stock prices and predic
 # User input
 st.sidebar.header("Settings")
 ticker = st.sidebar.text_input("Enter Stock Symbol:", value="TSLA").upper()
+
+# Data period selection
 period_options = {
     "Recent Data Only (1 week)": "1wk",
     "1 Month": "1mo", 
@@ -251,32 +211,9 @@ predict_button = st.sidebar.button("Predict")
 # Display a status message during loading
 if predict_button:
     with st.spinner(f"Analyzing {ticker} data and generating prediction..."):
-        today = datetime.date.today()
-        
-        # Calculate start date based on period
-        if period == "1wk":
-            start_date = today - datetime.timedelta(days=7)
-        elif period == "1mo":
-            start_date = today - datetime.timedelta(days=30)
-        elif period == "3mo":
-            start_date = today - datetime.timedelta(days=90)
-        elif period == "6mo":
-            start_date = today - datetime.timedelta(days=180)
-        elif period == "1y":
-            start_date = today - datetime.timedelta(days=365)
-        elif period == "2y":
-            start_date = today - datetime.timedelta(days=730)
-        else:  # 5y
-            start_date = today - datetime.timedelta(days=1825)
-        
-        # Try to get the stock data with a descriptive error message
+        # Try to get the stock data with exponential backoff
         try:
-            if period == "1wk" or period == "1mo" or period == "3mo":
-                # For shorter periods, use period parameter directly to reduce API calls
-                df = yf.download(ticker, period=period, progress=False, session=yf_session)
-            else:
-                # For longer periods, try the more robust function
-                df = get_stock_data(ticker, start=start_date, end=today)
+            df = get_stock_data(ticker, period=period)
         except Exception as e:
             st.error(f"❌ Error fetching data: {e}")
             df = None
@@ -421,7 +358,6 @@ if predict_button:
                     # Model accuracy information
                     if len(X_test) > 0 and len(y_test) > 0:
                         # Calculate and display model accuracy metrics if we have test data
-                        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
                         mae = mean_absolute_error(y_test_rescaled, y_pred_rescaled)
                         rmse = np.sqrt(mean_squared_error(y_test_rescaled, y_pred_rescaled))
                         r2 = r2_score(y_test_rescaled, y_pred_rescaled)
