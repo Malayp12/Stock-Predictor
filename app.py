@@ -1,5 +1,6 @@
 import datetime
 import streamlit as st
+import yfinance as yf
 import praw
 import pandas as pd
 import numpy as np
@@ -11,36 +12,16 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from yahoo_fin import news
 from bs4 import BeautifulSoup
 
-# Alpha Vantage API Setup
-API_KEY = "NTIUPIA31V3JCJOG"
-
-def get_alpha_vantage_data(symbol, api_key):
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "TIME_SERIES_DAILY",
-        "symbol": symbol,
-        "outputsize": "compact",
-        "apikey": api_key
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    if "Time Series (Daily)" not in data:
-        st.error(f"Alpha Vantage response error: {data}")
+# Safe download wrapper using yfinance
+def safe_download(ticker, start, end):
+    try:
+        df = yf.download(ticker, start=start, end=end, progress=False)
+        if df.empty:
+            return None
+        return df
+    except Exception as e:
+        print(f"Download failed: {e}")
         return None
-
-    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
-    df = df.rename(columns={
-        "1. open": "Open",
-        "2. high": "High",
-        "3. low": "Low",
-        "4. close": "Close",
-        "5. volume": "Volume"
-    })
-    df = df.sort_index()
-    df.index = pd.to_datetime(df.index)
-    df = df.astype(float)
-    return df
 
 # Page setup
 st.set_page_config(page_title="Stock Price Predictor", layout="wide")
@@ -54,12 +35,11 @@ predict_button = st.sidebar.button("Predict")
 
 if predict_button:
     today = datetime.date.today()
-    df = get_alpha_vantage_data(ticker, API_KEY)
+    df = safe_download(ticker, start='2018-01-01', end=today)
 
     if df is None:
-        st.error("❌ Failed to load stock data from Alpha Vantage.")
+        st.error("❌ No data found. Please check the stock symbol or try again later.")
     else:
-        df = df[df.index <= pd.to_datetime(today)]
         st.markdown("---")
         st.subheader(f"{ticker} Historical Closing Price Chart")
         st.line_chart(df['Close'])
@@ -147,4 +127,4 @@ if predict_button:
         st.success(f"${tomorrow_pred_price[0][0]:.2f}")
 
         st.markdown("---")
-        st.caption("Built by Malay Patel. Powered by Streamlit, Alpha Vantage, Reddit API.")
+        st.caption("Built by Malay Patel. Powered by Streamlit, Yahoo Finance, Reddit API.")
