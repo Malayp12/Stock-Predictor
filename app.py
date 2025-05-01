@@ -17,15 +17,16 @@ API_KEY = "NTIUPIA31V3JCJOG"
 def get_alpha_vantage_data(symbol, api_key):
     url = "https://www.alphavantage.co/query"
     params = {
-        "function": "TIME_SERIES_DAILY_ADJUSTED",
+        "function": "TIME_SERIES_DAILY",
         "symbol": symbol,
-        "outputsize": "full",
+        "outputsize": "compact",
         "apikey": api_key
     }
     response = requests.get(url, params=params)
     data = response.json()
 
     if "Time Series (Daily)" not in data:
+        st.error(f"Alpha Vantage response error: {data}")
         return None
 
     df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
@@ -34,8 +35,7 @@ def get_alpha_vantage_data(symbol, api_key):
         "2. high": "High",
         "3. low": "Low",
         "4. close": "Close",
-        "5. adjusted close": "Adj Close",
-        "6. volume": "Volume"
+        "5. volume": "Volume"
     })
     df = df.sort_index()
     df.index = pd.to_datetime(df.index)
